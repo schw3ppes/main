@@ -1,0 +1,94 @@
+name: Python CI/CD Pipeline
+
+on: [push, pull_request]
+
+jobs:
+  # ЭТАП 1: Проверка кода и качества
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install flake8 black
+        
+    - name: Check formatting with Black
+      run: black --check .
+      
+    - name: Lint with flake8
+      run: flake8 . --count --max-line-length=127 --statistics
+
+  # ЭТАП 2: Тестирование
+  test:
+    runs-on: ubuntu-latest
+    needs: code-quality  # Зависит от успеха code-quality
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+        
+    - name: Run tests with coverage
+      run: pytest --cov=./ --cov-report=xml --cov-report=html
+      
+    # ЭТАП 3: Сохранение отчетов (задача 5)
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          coverage.xml
+          htmlcov/
+        retention-days: 7
+
+  # ЭТАП 4: Сборка и упаковка (задача 4)
+  build:
+    runs-on: ubuntu-latest
+    needs: test  # Зависит от успеха тестов
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install build tools
+      run: pip install build
+      
+    - name: Build package
+      run: python -m build
+      
+    - name: Upload package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package
+        path: dist/
+        retention-days: 30
+
+  # ЭТАП 5: Уведомления (задача 5)
+  notify:
+    runs-on: ubuntu-latest
+    needs: [code-quality, test, build]
+    if: always()  # Всегда запускаем для уведомлений
+    
+    steps:
+    - name: Workflow status
+      run: |
+        echo "Workflow completed!"
+        echo "View results: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
